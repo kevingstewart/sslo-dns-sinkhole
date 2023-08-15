@@ -4,7 +4,7 @@
 
 -----------------
 
-The configuration relies on two components:
+DNS sinkholing is a method to divert traffic away from its intended target. Contrast this with DNS blackholing, which causes all traffic to a target to be dropped. Both of these are performed with DNS record manipulation. With blackholing, an NXDOMAIN record is typically returned. With sinkholing, a separate target address is returned from the resolution query, often to a site that presents a blocking page. Sinkholing works well for cleartext traffic to enable injection of a blocking page, but under normal conditions a TLS client would receive the blocking page with a certificate warning, as the certificate received would not match the site requested. The following integration enables SSL Orchestrator for the purpose of generating (forging) a certificate that is both locally trusted and matches the URL requested by the client. The configuration relies on two components:
 
 * A **sinkhole internal** virtual server with client SSL profile to host a sinkhole certificate and key. This is a certificate with empty Subject field used as the origin for forging a trusted certificate to the internal client. 
 
