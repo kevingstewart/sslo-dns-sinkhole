@@ -1,6 +1,9 @@
 #!/bin/bash
+# SSLO DNS Sinkhole Internal Config Creator
+# Author: kevin-at-f5-dot-com
+# Creates the sinkhole cert/key and internal VIP configuration
 
-## Generate a self-signed template cert with empty Subject field
+## Create the sinkhole cert and key with empty Subject field
 openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
 -keyout "sinkhole.key" \
 -out "sinkhole.crt" \
@@ -13,22 +16,15 @@ x509_extensions=v3_req\n
 keyUsage=critical,digitalSignature,keyEncipherment\n
 extendedKeyUsage=serverAuth,clientAuth") > /dev/null 2>&1
 
-## Create the sinkhole internal iRule
-tmsh create ltm rule sinkhole-rule when HTTP_REQUEST { HTTP::respond 200 content "Access Denied\!" "connection" "close" } > /dev/null 2>&1
-
-## Create the BIG-IP certificate/key, client SSL profile, and internal sinkhole virtual server
+## Update the BIG-IP sinkhole cert/key objects
 (echo create cli transaction
-echo install sys crypto key sinkhole from-local-file "$(pwd)/sinkhole.key"
-echo install sys crypto cert sinkhole from-local-file "$(pwd)/sinkhole.crt"
-echo create ltm profile client-ssl sinkhole-clientssl cert sinkhole key sinkhole
-echo create ltm virtual sinkhole-vip destination 0.0.0.0:9999 profiles replace-all-with { tcp http sinkhole-clientssl } vlans-enabled rules { sinkhole-rule }
+echo install sys crypto key sinkhole-cert from-local-file "$(pwd)/sinkhole.key"
+echo install sys crypto cert sinkhole-cert from-local-file "$(pwd)/sinkhole.crt"
 echo submit cli transaction
 ) | tmsh > /dev/null 2>&1
 
-## Clean up sinkhole template cert/key
+## Create sinkhole client SSL profile and virtual server
+tmsh create ltm profile client-ssl sinkhole-clientssl cert sinkhole-cert key sinkhole-cert > /dev/null 2>&1
+tmsh create ltm virtual sinkhole-internal-vip destination 0.0.0.0:9999 profiles replace-all-with { tcp http sinkhole-clientssl } vlans-enabled > /dev/null 2>&1
+
 rm -f sinkhole.crt sinkhole.key
-
-
-
-
-
