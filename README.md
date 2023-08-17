@@ -134,10 +134,12 @@ The easiest way to **test** this solution is to create an **/etc/hosts** file en
 
 * For environments that allow/enable DNS-over-HTTPS (DoH) and/or DNS-over-TLS (DoT) to third party DoH/DoT resolvers (ex. Cloudflare), a modification of the [SSL Orchestrator DNS-over-HTTPS Detection](https://github.com/f5devcentral/sslo-script-tools/tree/main/sslo-dns-over-https-detection) use case could be employed. This is an SSL Orchestrator use case for the detection, decryption, and management of outgoing DoH/DoT traffic. The modified DoH/DoT detection iRule is provided in **this** repository: **sslo-doh-logging.tcl**. Add this iRule to the BIG-IP, then add to the Interception Rule of a standard outbound L3 SSL Orchestrator topology. The local version of this iRule adds support for DNS sinkhole. In the RULE_INIT section, a new **set static:::SINKHOLE_IP** variable exists. To enable sinkholing, plug the local sinkhole IP address into this variable.
 
-* Injecting a static HTML response blocking page is just one option among many. You could, for example, issue a redirect instead of static HTML, and send the client to a more formal "splash page". This redirect could inject additional metadata to provide to the splash page.
+* Injecting a static HTML response blocking page is just one option among many. You could, for example, issue a redirect instead of static HTML, and send the client to a more formal "splash page". This redirect could inject additional metadata to provide to the splash page. For example:
 
 ```
-
+when HTTP_REQUEST {
+  HTTP::redirect "https://splash.f5labs.com/?cats=gis-dns-block&client_ip=[IP::client_addr]&type=dns&url=[URI::encode [b64encode [HTTP::host]]"
+}
 ```
 
 
