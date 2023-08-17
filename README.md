@@ -4,13 +4,17 @@
 
 -----------------
 
-DNS sinkholing is a method to divert traffic away from its intended target. Contrast this with DNS blackholing, which causes all traffic to a target to be dropped. Both of these are performed with DNS record manipulation. With blackholing, an NXDOMAIN record is typically returned. With sinkholing, a separate target address is returned from the resolution query, often to a site that presents a blocking page. Sinkholing works well for cleartext traffic to enable injection of a blocking page, but under normal conditions a TLS client would receive the blocking page with a certificate warning, as the certificate received would not match the site requested. The following integration enables SSL Orchestrator for the purpose of generating (forging) a certificate that is both locally trusted and matches the URL requested by the client. The configuration relies on two components:
+DNS sinkholing is a method to divert traffic away from its intended target (divert to something). Contrast this with DNS blackholing, which causes all traffic to a target to be dropped (divert to nothing). Both of these security functions are performed with DNS record manipulation. With blackholing, an NXDOMAIN record is typically returned. With sinkholing, a separate target address is returned from the resolution query, often to a site that presents a blocking page. Sinkholing works well for cleartext traffic to enable injection of a blocking page, but under normal conditions a TLS client would receive the blocking page with a certificate warning, as the certificate received would not match the site requested. The following integration enables SSL Orchestrator for the purpose of generating (forging) a server certificate that is both locally trusted and matches the URL requested by the client. The configuration relies on two components:
 
 * A **sinkhole internal** virtual server with client SSL profile to host a sinkhole certificate and key. This is a certificate with empty Subject field used as the origin for forging a trusted certificate to the internal client. 
 
-* An **SSL Orchestrator** outbound L3 topology that is modified to accept traffic on a specific internal client-facing IP:port and points to the internal virtual server. When a client makes a request to this virtual, SSL Orchestrator fetches the origin "sinkhole" certificate, forges a new local certificate, and auto-injects a subject-alternative-name into the forged cert to match the client's request. An iRule is added to enable an HTTP blocking page response on the explicitly decrypted traffic.
+* An **SSL Orchestrator** outbound L3 topology that is modified to accept traffic on a specific client-facing IP:port and points to the internal virtual server. When an internal client makes a request to this virtual server, SSL Orchestrator fetches the origin "sinkhole" certificate, forges a new local certificate, and auto-injects a subject-alternative-name into the forged certificate to match the client's request. An iRule is added to insert an HTTP/HTML blocking page response on the explicitly decrypted traffic.
+
+DNS sinkholing to a blocking page effectively relies on two separate technologies: the DNS security solution itself - the thing that manipulates the client's DNS request for the purpose of preventing access to suspected malicious sites, and the sinkhole target - the thing that presents a valid certificate to the client and injects the blocking response. This integration specifically addresses the latter. The former is reasonably out-of-scope, and could be provided in any number of ways, as discussed below in the **Testing** topic.
 
 -----------------
+
+### Configuration: Sinkhole Internal
 
 To create the **sinkhole internal** virtual server configuration:
 
@@ -88,6 +92,8 @@ To create the **sinkhole internal** virtual server configuration:
 
 -----------------
 
+### Configuration: Sinkhole External (SSL Orchestrator)
+
 To create the **SSL Orchestrator** outbound L3 topology configuration, in the SSL Orchestrator UI, create a new Topology. Any section not mentioned below can be skipped.
 
 * **Topology Properties**
@@ -120,7 +126,21 @@ Ignore all other settings and **Deploy**.
 
 -----------------
 
-To **Test**, update an /etc/hosts file entry on a client, or update a local DNS server record to point a specific url (ex. www.example.com) to the IP address specified in the SSL Orchestrator outbound L3 topology. Attempt to access that HTTPS and HTTP URL from a browser on this client. The blocking page content will be returned along with a valid locally-issued server certificate.
+### Testing
+
+The easiest way to **test** this solution is to create an **/etc/hosts** file entry on a client for some Internet site (ex. www.example.com) and point that to your SSL Orchestrator (sinkhole external) listening IP. Attempt to access that site via HTTPS and HTTP from a browser on this client. The blocking page content will be returned along with a valid locally-issued server certificate. This minimally tests a single client through local DNS manipulation. To expand on this idea into more practical implementations, consider the following:
+
+* Any proper DNS security solution can work here, from any security vendor, assuming it supports sinkholing (returning a specified address to clients for blocked sites).
+
+* For environments that allow/enable DNS-over-HTTPS (DoH) and/or DNS-over-TLS (DoT) to third party DoH/DoT resolvers (ex. Cloudflare), a modification of the [SSL Orchestrator DNS-over-HTTPS Detection](https://github.com/f5devcentral/sslo-script-tools/tree/main/sslo-dns-over-https-detection) use case could be employed. This is an SSL Orchestrator use case for the detection, decryption, and management of outgoing DoH/DoT traffic. The modified DoH/DoT detection iRule is provided in **this** repository: **sslo-doh-logging.tcl**. Add this iRule to the BIG-IP, then add to the Interception Rule of a standard outbound L3 SSL Orchestrator topology. The local version of this iRule adds support for DNS sinkhole. In the RULE_INIT section, a new **set static:::SINKHOLE_IP** variable exists. To enable sinkholing, plug the local sinkhole IP address into this variable.
+
+* Injecting a static HTML response blocking page is just one option among many. You could, for example, issue a redirect instead of static HTML, and send the client to a more formal "splash page". This redirect could inject additional metadata to provide to the splash page.
+
+```
+
+```
+
+
 
 
 
